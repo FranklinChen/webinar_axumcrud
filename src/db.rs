@@ -7,7 +7,7 @@ use anyhow::Result;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row, SqlitePool};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 
 /// Represents a book, taken from the books table in SQLite.
 #[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
@@ -122,12 +122,12 @@ pub async fn add_book<S: ToString>(
 /// ## Arguments
 /// * `connection_pool` - the database connection to use
 /// * `book` - the book object to update. The primary key will be used to
-///            determine which row is updated.
+///   determine which row is updated.
 pub async fn update_book(connection_pool: &SqlitePool, book: &Book) -> Result<()> {
     sqlx::query("UPDATE books SET title=$1, author=$2 WHERE id=$3")
         .bind(&book.title)
         .bind(&book.author)
-        .bind(&book.id)
+        .bind(book.id)
         .execute(connection_pool)
         .await?;
     CACHE.invalidate().await;
@@ -200,6 +200,6 @@ mod test {
         let _new_book = book_by_id(&cnn, new_id).await.unwrap();
         delete_book(&cnn, new_id).await.unwrap();
         let all_books = all_books(&cnn).await.unwrap();
-        assert!(all_books.iter().find(|b| b.title == "DeleteMe").is_none());
+        assert!(!all_books.iter().any(|b| b.title == "DeleteMe"));
     }
 }

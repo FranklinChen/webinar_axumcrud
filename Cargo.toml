@@ -13,4 +13,4 @@ axum = "0.8.3"
 once_cell = "1.21.3"
 
 [dev-dependencies]
-axum-test-helper = "0.4.0"
+axum-test = "17.3.0"

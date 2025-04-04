@@ -11,10 +11,10 @@ use sqlx::SqlitePool;
 pub fn books_service() -> Router {
     Router::new()
         .route("/", get(get_all_books))
-        .route("/:id", get(get_book))
+        .route("/{id}", get(get_book))
         .route("/add", post(add_book))
         .route("/edit", put(update_book))
-        .route("/delete/:id", delete(delete_book))
+        .route("/delete/{id}", delete(delete_book))
 }
 
 /// Wrap the db layer in a GET request, using Axum's built-in JSON support.
@@ -101,49 +101,49 @@ async fn delete_book(Extension(cnn): Extension<SqlitePool>, Path(id): Path<i32>)
 #[cfg(test)]
 mod test {
     use super::*;
-    use axum_test_helper::TestClient;
+    use axum_test::TestServer;
 
-    async fn setup_tests() -> TestClient {
+    async fn setup_tests() -> TestServer {
         dotenv::dotenv().ok();
         let connection_pool = crate::init_db().await.unwrap();
         let app = crate::router(connection_pool);
-        TestClient::new(app)
+        TestServer::new(app).unwrap()
     }
 
     #[tokio::test]
     async fn get_all_books() {
-        let client = setup_tests().await;
-        let res = client.get("/books").send().await;
-        assert_eq!(res.status(), StatusCode::OK);
-        let books: Vec<Book> = res.json().await;
+        let server = setup_tests().await;
+        let res = server.get("/books").await;
+        res.assert_status_ok();
+        let books: Vec<Book> = res.json();
         assert!(!books.is_empty());
     }
 
     #[tokio::test]
     async fn get_one_book() {
-        let client = setup_tests().await;
-        let res = client.get("/books/1").send().await;
-        assert_eq!(res.status(), StatusCode::OK);
-        let book: Book = res.json().await;
+        let server = setup_tests().await;
+        let res = server.get("/books/1").await;
+        res.assert_status_ok();
+        let book: Book = res.json();
         assert_eq!(book.id, 1)
     }
 
     #[tokio::test]
     async fn add_book() {
-        let client = setup_tests().await;
+        let server = setup_tests().await;
         let new_book = Book {
             id: -1,
             title: "Test POST Book".to_string(),
             author: "Test POST Author".to_string(),
         };
-        let res = client.post("/books/add").json(&new_book).send().await;
-        assert_eq!(res.status(), StatusCode::OK);
-        let new_id: i32 = res.json().await;
+        let res = server.post("/books/add").json(&new_book).await;
+        res.assert_status_ok();
+        let new_id: i32 = res.json();
         assert!(new_id > 0);
 
-        let test_book = client.get(&format!("/books/{new_id}")).send().await;
-        assert_eq!(test_book.status(), StatusCode::OK);
-        let test_book: Book = test_book.json().await;
+        let test_book = server.get(&format!("/books/{new_id}")).await;
+        test_book.assert_status_ok();
+        let test_book: Book = test_book.json();
         assert_eq!(new_id, test_book.id);
         assert_eq!(new_book.title, test_book.title);
         assert_eq!(new_book.author, test_book.author);
@@ -151,38 +151,29 @@ mod test {
 
     #[tokio::test]
     async fn update_book() {
-        let client = setup_tests().await;
-        let mut book1: Book = client.get("/books/1").send().await.json().await;
+        let server = setup_tests().await;
+        let mut book1: Book = server.get("/books/1").await.json();
         book1.title = "Updated book".to_string();
-        let res = client.put("/books/edit").json(&book1).send().await;
-        assert_eq!(res.status(), StatusCode::OK);
-        let book2: Book = client.get("/books/1").send().await.json().await;
+        let res = server.put("/books/edit").json(&book1).await;
+        res.assert_status_ok();
+        let book2: Book = server.get("/books/1").await.json();
         assert_eq!(book1.title, book2.title);
     }
 
     #[tokio::test]
     async fn delete_book() {
-        let client = setup_tests().await;
+        let server = setup_tests().await;
         let new_book = Book {
             id: -1,
             title: "Delete me".to_string(),
             author: "Delete me".to_string(),
         };
-        let new_id: i32 = client
-            .post("/books/add")
-            .json(&new_book)
-            .send()
-            .await
-            .json()
-            .await;
+        let new_id: i32 = server.post("/books/add").json(&new_book).await.json();
 
-        let res = client
-            .delete(&format!("/books/delete/{new_id}"))
-            .send()
-            .await;
-        assert_eq!(res.status(), StatusCode::OK);
+        let res = server.delete(&format!("/books/delete/{new_id}")).await;
+        res.assert_status_ok();
 
-        let all_books: Vec<Book> = client.get("/books").send().await.json().await;
-        assert!(all_books.iter().find(|b| b.id == new_id).is_none())
+        let all_books: Vec<Book> = server.get("/books").await.json();
+        assert!(!all_books.iter().any(|b| b.id == new_id))
     }
 }
