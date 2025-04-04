@@ -1,8 +1,8 @@
-use crate::db::{all_books, book_by_id, Book};
+use crate::db::{Book, all_books, book_by_id};
 use axum::extract::Path;
 use axum::http::StatusCode;
 use axum::routing::{delete, get, post, put};
-use axum::{extract, Extension, Json, Router};
+use axum::{Extension, Json, Router, extract};
 use sqlx::SqlitePool;
 
 /// Build the books REST service.
